@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TwinMind — AI Meeting Transcriber</title>
+  <meta name="description"
+    content="Real-time AI meeting transcription powered by Whisper Large V3. Start recording and get automatic transcripts in seconds." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Playfair+Display:wght@500;600;700&display=swap"
+    rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <div class="app">
+
+    <!-- Header (spans both columns) -->
+    <header class="header app-header">
+      <div class="logo">
+        <div class="logo-icon"><span class="material-symbols-outlined">neurology</span></div>
+        <div class="logo-text">Twin<span>Mind</span></div>
+      </div>
+      <div class="header-status" id="headerStatus">
+        <div class="status-label" id="statusLabel">Ready to Record</div>
+        <div class="status-sub" id="statusSub">Select a source above, then click the button</div>
+        <div class="timer hidden" id="timer">00:00</div>
+      </div>
+      <div class="header-audio-controls">
+        <button class="record-btn header-record-btn" id="recordBtn" title="Start Recording" aria-label="Start Recording">
+          <span class="material-symbols-outlined">radio_button_checked</span>
+        </button>
+        <label class="source-select-wrap" for="sourceSelect" title="Audio source">
+          <span class="material-symbols-outlined">mic_external_on</span>
+          <select id="sourceSelect" class="source-select" aria-label="Audio source">
+            <option value="system">System Audio</option>
+            <option value="both">Both</option>
+            <option value="mic">Mic Only</option>
+          </select>
+        </label>
+        <div class="recorder-card header-recorder-card" id="recorderCard">
+          <div class="waveform-wrap" id="waveform"></div>
+          <div class="chunk-bar-wrap hidden" id="chunkBarWrap">
+            <div class="chunk-bar-label">
+              <span>Next chunk in</span>
+              <span id="chunkCountdown">30s</span>
+            </div>
+            <div class="chunk-bar-track">
+              <div class="chunk-bar-fill" id="chunkBarFill"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btnOpenSettings" class="btn-header-export"><span class="material-symbols-outlined">tune</span><span>Settings</span></button>
+        <button id="btnExportSession" class="btn-header-export" title="Export full session (JSON)"><span class="material-symbols-outlined">download</span><span>Export Full Session</span></button>
+      </div>
+    </header>
+
+    <!-- LEFT COLUMN: Mic + Transcript -->
+    <div class="col-left">
+
+      <div class="column-kicker">Transcript</div>
+
+
+      <!-- Transcript Panel -->
+      <div class="transcript-panel">
+        <div class="transcript-header">
+          <div class="transcript-title">
+            <div class="transcript-dot" id="transcriptDot"></div>
+            <span>Transcript</span>
+          </div>
+          <div class="transcript-actions">
+            <button class="btn-action" id="btnCopy" disabled><span class="material-symbols-outlined">content_copy</span><span>Copy</span></button>
+            <button class="btn-action" id="btnDownload" disabled><span class="material-symbols-outlined">download</span><span>Export</span></button>
+            <button class="btn-action" id="btnClear" disabled><span class="material-symbols-outlined">delete</span><span>Clear</span></button>
+          </div>
+        </div>
+        <div class="transcript-body" id="transcriptBody">
+          <div class="empty-state" id="emptyState">
+            <div class="empty-icon"><span class="material-symbols-outlined">mic</span></div>
+            <div class="empty-label">No transcription yet</div>
+            <div class="empty-sub">Press the record button and speak. Transcript will appear here every ~30 seconds.
+            </div>
+          </div>
+        </div>
+        <div class="stats-bar">
+          <div class="stat">Segments: <span class="stat-val" id="segCount">0</span></div>
+          <div class="stat">Words: <span class="stat-val" id="wordCount">0</span></div>
+          <div class="stat">Duration: <span class="stat-val" id="durationStat">—</span></div>
+        </div>
+      </div>
+
+    </div><!-- /col-left -->
+
+    <!-- MIDDLE COLUMN: Live Suggestions -->
+    <div class="col-right">
+      <div class="column-kicker">Suggestions</div>
+      <div class="suggestions-panel">
+        <div class="sug-header">
+          <div class="sug-title">
+            <div class="sug-dot" id="sugDot"></div>
+            <span>Live Suggestions</span>
+          </div>
+          <button class="btn-refresh" id="btnRefresh" title="Refresh suggestions from the current transcript">
+            <span class="refresh-icon material-symbols-outlined">refresh</span><span>Refresh</span>
+          </button>
+        </div>
+        <div class="sug-body" id="sugBody">
+          <div class="sug-empty" id="sugEmpty">
+            <div class="sug-empty-icon"><span class="material-symbols-outlined">tips_and_updates</span></div>
+            <div class="sug-empty-label">Waiting for transcript…</div>
+            <div class="sug-empty-sub">Start recording — suggestions appear automatically after each 30‑second chunk.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /col-right -->
+
+    <!-- RIGHT COLUMN: Detailed Answer -->
+    <div class="col-chat">
+      <div class="column-kicker">Chat</div>
+      <div class="chat-panel">
+        <div class="chat-header">
+          <div class="chat-dot"></div>
+          <span>Detailed Answer</span>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+          <div class="chat-empty" id="chatEmpty">
+            <div class="chat-empty-icon"><span class="material-symbols-outlined">forum</span></div>
+            <div class="chat-empty-label">Get detailed answers about the meeting</div>
+            <div class="chat-empty-sub">Click a suggestion or type a question below. Full transcript context is
+              included.</div>
+          </div>
+        </div>
+        <div class="chat-input-wrap">
+          <textarea id="chatInput" class="chat-input" placeholder="Ask a question…" rows="1"></textarea>
+          <button id="btnChatSend" class="btn-chat-send" title="Send"><span class="material-symbols-outlined">north_east</span></button>
+        </div>
+      </div>
+    </div><!-- /col-chat -->
+
+  </div><!-- /app -->
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Settings Modal (Popup Overlay) -->
+  <div class="modal-overlay hidden" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>TwinMind Settings</h2>
+        <button class="modal-close" id="btnModalClose">×</button>
+      </div>
+
+      <div class="modal-body" id="settingsForm">
+
+        <div class="settings-group">
+          <label>Groq API Key</label>
+          <div class="api-row" style="margin-top: 6px;">
+            <input type="password" id="settingsApiKey" class="api-input"
+              placeholder="gsk_••••••••••••••••••••••••••••••••" autocomplete="off" spellcheck="false" />
+          </div>
+          <p class="setting-desc">Required to run Whisper and GPT models. Free at console.groq.com.</p>
+        </div>
+
+        <div class="settings-group">
+          <label>Live Suggestion Prompt</label>
+          <textarea id="settingsLivePrompt" class="settings-textarea" spellcheck="false"></textarea>
+          <p class="setting-desc">System prompt for 30s rolling interval context. Use {{DUPES}} to print historical
+            payloads and avoid repeat outputs.</p>
+        </div>
+
+        <div class="settings-group">
+          <label>Chat Analyst Prompt</label>
+          <textarea id="settingsChatPrompt" class="settings-textarea" spellcheck="false"></textarea>
+          <p class="setting-desc">System prompt for explicit chat questions or expanded card answer clicks. Use
+            {{TRANSCRIPT}} to inject full history.</p>
+        </div>
+
+        <div class="settings-group">
+          <label>Click-Answer Prompt</label>
+          <textarea id="settingsClickPrompt" class="settings-textarea" spellcheck="false"></textarea>
+          <p class="setting-desc">Prompt used when a suggestion card is clicked. Use {{ACTION}}, {{HINT}}, and {{TRANSCRIPT}}.</p>
+        </div>
+
+        <div class="settings-group">
+          <label>Context Profiles</label>
+          <div class="settings-presets">
+            <button type="button" class="settings-preset-btn" id="presetFast">Fast</button>
+            <button type="button" class="settings-preset-btn" id="presetBalanced">Balanced</button>
+            <button type="button" class="settings-preset-btn" id="presetDeep">Deep</button>
+          </div>
+          <p class="setting-desc">One-click tuning for speed vs depth. Balanced matches your current setup.</p>
+        </div>
+
+        <div class="settings-group">
+          <label>Suggestion Context Window (characters)</label>
+          <div class="settings-value-row">
+            <span class="settings-value-chip" id="settingsSuggestionCharsValue">800</span>
+          </div>
+          <input type="number" id="settingsSuggestionChars" class="api-input" min="400" step="100" />
+          <input type="range" id="settingsSuggestionCharsRange" min="400" max="2400" step="100" />
+          <p class="setting-desc">How much recent transcript text is sent to suggestion generation.</p>
+        </div>
+
+        <div class="settings-group">
+          <label>Chat Context Window (characters)</label>
+          <div class="settings-value-row">
+            <span class="settings-value-chip" id="settingsChatCharsValue">900</span>
+          </div>
+          <input type="number" id="settingsChatChars" class="api-input" min="800" step="100" />
+          <input type="range" id="settingsChatCharsRange" min="800" max="4000" step="100" />
+          <p class="setting-desc">How much combined summary + transcript is sent to chat answers.</p>
+        </div>
+
+        <div class="settings-group">
+          <label>Recent Memory Window (seconds)</label>
+          <div class="settings-value-row">
+            <span class="settings-value-chip" id="settingsMemoryWindowValue">30</span>
+          </div>
+          <input type="number" id="settingsMemoryWindow" class="api-input" min="15" step="5" />
+          <input type="range" id="settingsMemoryWindowRange" min="15" max="120" step="5" />
+          <p class="setting-desc">Rolling recent-text buffer used to preserve meaning across chunk boundaries.</p>
+        </div>
+
+        <div class="settings-group">
+          <label>Context Impact</label>
+          <div class="settings-impact-row">
+            <span class="settings-impact-chip" id="settingsImpactChip">Balanced</span>
+            <span class="setting-desc" id="settingsImpactHint">Good quality and response speed.</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer">
+        <span class="settings-dirty-badge hidden" id="settingsDirtyBadge">Unsaved changes</span>
+        <button class="btn-action" id="btnResetDefaults" type="button">
+          <span class="material-symbols-outlined">restart_alt</span>
+          <span>Reset Defaults</span>
+        </button>
+        <button class="btn-setup" id="btnSaveSettings">Save Configuration</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- marked: battle-tested markdown parser; DOMPurify: XSS sanitiser -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.5/purify.min.js"></script>
+  <!-- ES module entry point — all imports resolved by the browser -->
+  <script type="module" src="app.js"></script>
+</body>
+
+</html>
