@@ -15,13 +15,13 @@ import {
 import { settings } from './state.js';
 
 const KEYS = {
-  apiKey:       'twinmind_groq_key',
-  livePrompt:   'twinmind_live_prompt_v2',
-  chatPrompt:   'twinmind_chat_prompt_v2',
-  clickPrompt:  'twinmind_click_prompt_v1',
-  suggChars:    'twinmind_suggestion_chars_v1',
-  chatChars:    'twinmind_chat_chars_v1',
-  memWindow:    'twinmind_memory_window_ms_v1',
+  apiKey:       'mytwinmind_groq_key',
+  livePrompt:   'mytwinmind_live_prompt_v2',
+  chatPrompt:   'mytwinmind_chat_prompt_v2',
+  clickPrompt:  'mytwinmind_click_prompt_v1',
+  suggChars:    'mytwinmind_suggestion_chars_v1',
+  chatChars:    'mytwinmind_chat_chars_v1',
+  memWindow:    'mytwinmind_memory_window_ms_v1',
 };
 
 export function loadSettings() {

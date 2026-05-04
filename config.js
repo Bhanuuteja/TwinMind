@@ -5,6 +5,7 @@
 
 export const GROQ_ENDPOINT      = 'https://api.groq.com/openai/v1/audio/transcriptions';
 export const GROQ_CHAT_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
+export const DAILY_GPT_TOKEN_LIMIT = 20_000;
 
 export const WHISPER_MODEL     = 'whisper-large-v3';
 export const SUGGESTIONS_MODEL = 'openai/gpt-oss-120b';
@@ -16,7 +17,7 @@ export const TIMESLICE_MS      = 250;
 
 // Context windows (characters) — user-configurable in Settings
 export const DEFAULT_SUGGESTION_CONTEXT_CHARS = 2400;
-export const DEFAULT_CHAT_CONTEXT_CHARS       = 3500;
+export const DEFAULT_CHAT_CONTEXT_CHARS       = 2200;
 export const DEFAULT_CHAT_RAW_CHUNKS          = 8;
 export const DEFAULT_MEMORY_WINDOW_MS         = 90_000;
 
@@ -34,8 +35,8 @@ export const MIN_NEW_WORDS_FOR_SUGGESTION = 50;
 export const SUGGESTION_COOLDOWN_MS     = 22_000; // min gap between auto-triggered calls
 
 // Chat
-export const CHAT_MAX_TOKENS    = 800;
-export const CHAT_HISTORY_TURNS = 6;   // cap at last N turns to control token spend
+export const CHAT_MAX_TOKENS    = 600;
+export const CHAT_HISTORY_TURNS = 4;   // cap at last N turns to control token spend
 
 // Whisper retry
 export const WHISPER_MAX_RETRIES    = 3;
@@ -87,7 +88,8 @@ Response style:
 - Prefer under 180 words unless the user asks for more.
 - Start with a direct answer in 1-2 sentences.
 - Add bullets only when they improve clarity.
-- End with one practical next step if appropriate.
+- Add a practical next step only when it is grounded in concrete transcript details.
+- Avoid generic filler like "ask the facilitator to clarify the goal" unless goal ambiguity is explicit.
 
 TRANSCRIPT CONTEXT:
 {{TRANSCRIPT}}`;
@@ -102,13 +104,16 @@ Your job: Answer directly. Give the user something they can immediately understa
 Response structure:
 1. Lead with the direct answer or core insight in 1-2 sentences.
 2. Add 2-4 sentences of supporting explanation, relevant context, or concrete examples.
-3. Close with one next step, follow-up question to ask the room, or action item.
+3. Optionally close with one next step, follow-up question, or action item only if it is specific and grounded.
 
 Grounding rules:
 - For technical or factual questions (architecture, protocols, benchmarks, concepts): answer confidently from your own knowledge first, then tie back to the transcript if relevant.
 - For meeting-specific details (names, decisions, metrics, timelines): use only what is in the transcript. If missing, briefly note it and answer the general question anyway.
+- Treat imperative suggestion labels (e.g., "Clarify intent behind...", "Ask for specifics...") as requests for a direct explanation, not as a prompt to ask another question back.
+- Do not respond with only a follow-up question. Provide the answer first.
 - Never say "I don't have enough transcript evidence" for a general technical or factual question — just answer it.
 - Never invent meeting facts.
+- Never add repetitive generic meeting-process advice unless the transcript explicitly supports it.
 - Target 120-220 words. Be direct and useful.
 
 TRANSCRIPT CONTEXT:

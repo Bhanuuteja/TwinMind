@@ -1,4 +1,4 @@
-# TwinMind – Real-Time AI Meeting Copilot for Live Decision Support
+# MyTwinMind – Real-Time AI Meeting Copilot for Live Decision Support
 
 ## Problem Statement
 
@@ -22,7 +22,7 @@ The core issue is cognitive overload during live conversations.
 
 ## Solution Overview
 
-TwinMind is a real-time AI meeting copilot that listens to live audio, transcribes it, and generates context-aware suggestions for what to say next.
+MyTwinMind is a real-time AI meeting copilot that listens to live audio, transcribes it, and generates context-aware suggestions for what to say next.
 
 **Key Features:**
 - Live audio transcription (chunked streaming)
@@ -107,7 +107,7 @@ AI significantly accelerated development speed, but required careful validation 
 
 ```bash
 git clone <repo-url>
-cd twinmind
+cd mytwinmind
 python -m http.server 8000
 ```
 

@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TwinMind — AI Meeting Transcriber</title>
+  <title>MyTwinMind — AI Meeting Transcriber</title>
   <meta name="description"
     content="Real-time AI meeting transcription powered by Whisper Large V3. Start recording and get automatic transcripts in seconds." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -25,7 +25,7 @@
     <header class="header app-header">
       <div class="logo">
         <div class="logo-icon"><span class="material-symbols-outlined">neurology</span></div>
-        <div class="logo-text">Twin<span>Mind</span></div>
+        <div class="logo-text">MyTwin<span>Mind</span></div>
       </div>
       <div class="header-status" id="headerStatus">
         <div class="status-label" id="statusLabel">Ready to Record</div>
@@ -107,10 +107,14 @@
           <div class="sug-title">
             <div class="sug-dot" id="sugDot"></div>
             <span>Live Suggestions</span>
+            <span class="sug-batch-counter" id="sugBatchCount">0 BATCHES</span>
           </div>
-          <button class="btn-refresh" id="btnRefresh" title="Refresh suggestions from the current transcript">
-            <span class="refresh-icon material-symbols-outlined">refresh</span><span>Refresh</span>
-          </button>
+          <div class="sug-actions">
+            <span class="sug-auto-refresh-label" id="sugAutoRefreshLabel">Auto-refresh in 30s</span>
+            <button class="btn-refresh" id="btnRefresh" title="Refresh suggestions from the current transcript">
+              <span class="refresh-icon material-symbols-outlined">refresh</span><span>Refresh</span>
+            </button>
+          </div>
         </div>
         <div class="sug-body" id="sugBody">
           <div class="sug-empty" id="sugEmpty">
@@ -155,7 +159,7 @@
   <div class="modal-overlay hidden" id="settingsModal">
     <div class="modal">
       <div class="modal-header">
-        <h2>TwinMind Settings</h2>
+        <h2>MyTwinMind Settings</h2>
         <button class="modal-close" id="btnModalClose">×</button>
       </div>
 

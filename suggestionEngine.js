@@ -87,8 +87,12 @@ export async function generateSuggestions(sessionId, existingPreviews, onResult,
 
     const modelItems = Array.isArray(parsed?.suggestions) ? parsed.suggestions : [];
     const batch = assembleBatch(modelItems, existingPreviews, context);
+    const quality = evaluateBatchQuality(batch, context);
 
     if (batch.length >= 1) {
+      if (quality.highConfidenceCount < 2) {
+        console.warn(`[Suggestions] Low-confidence batch (${quality.highConfidenceCount}/3 high-confidence)`);
+      }
       session.suggestionHistory.push({ timestamp: new Date().toISOString(), suggestions: batch });
       onResult(batch);
     }
@@ -199,7 +203,9 @@ function assembleBatch(modelItems, existingPreviews, transcriptContext) {
   }
 
   // Hard guarantee: always return exactly 3 distinct suggestions.
-  while (chosen.length < 3) {
+  let safety = 0;
+  while (chosen.length < 3 && safety < 12) {
+    safety += 1;
     const anchor = pickFallbackAnchor(transcriptContext);
     const i = chosen.length + 1;
     tryAdd({
@@ -213,7 +219,44 @@ function assembleBatch(modelItems, existingPreviews, transcriptContext) {
     });
   }
 
+  ensureTypeDiversity(chosen, normalise(modelItems), buildFallbackSuggestions(transcriptContext), existingPreviewKeys);
+
+  // Final hard guarantee for assignment compliance: always return 3 cards.
+  let emergency = 0;
+  while (chosen.length < 3 && emergency < 6) {
+    emergency += 1;
+    const anchor = pickFallbackAnchor(transcriptContext);
+    const i = chosen.length + 1;
+    const fallback = {
+      type: i % 2 === 0 ? 'QUESTION_TO_ASK' : 'CLARIFICATION',
+      preview: `Connect "${anchor}" to the current decision (${i})`,
+      detail: `How does "${anchor}" change our immediate decision, owner, or timeline?`,
+    };
+    const previewKey = toKey(fallback.preview);
+    const duplicate = chosen.some(s => toKey(s.preview) === previewKey) || existingPreviewKeys.has(previewKey);
+    if (!duplicate) chosen.push(fallback);
+  }
+
   return chosen.slice(0, 3);
+}
+
+function ensureTypeDiversity(chosen, modelCandidates, fallbackCandidates, existingPreviewKeys) {
+  if (!chosen.length) return;
+  if (new Set(chosen.map(s => s.type)).size >= 2) return;
+
+  const currentPreviewKeys = new Set(chosen.map(s => toKey(s.preview)));
+  const pools = [...modelCandidates, ...normalise(fallbackCandidates)];
+  const targetType = chosen[0]?.type || '';
+
+  for (const candidate of pools) {
+    if (!candidate || candidate.type === targetType) continue;
+    const previewKey = toKey(candidate.preview);
+    if (!previewKey) continue;
+    if (existingPreviewKeys.has(previewKey)) continue;
+    if (currentPreviewKeys.has(previewKey)) continue;
+    chosen[chosen.length - 1] = candidate;
+    return;
+  }
 }
 
 function buildFallbackSuggestions(transcriptContext) {
@@ -395,6 +438,14 @@ function extractLoosely(text) {
 // ── Normalisation & quality filter ────────────────────────────────────────
 
 const GENERIC_PHRASES = [
+  /^ask a question$/i,
+  /^give more context$/i,
+  /^show an example$/i,
+  /^ask for specifics on\b/i,
+  /^clarify the point about\b/i,
+  /^clarify the latest discussion point/i,
+  /^capture a next step from\b/i,
+  /^validate the claim related to\b/i,
   /^clarify (owner|next step)/i,
   /^confirm (timeline|owner|deadline)/i,
   /^align on scope/i,
@@ -414,4 +465,40 @@ function normalise(items) {
     }))
     .filter(s => s.type && s.preview && s.preview.length >= 8)
     .filter(s => !GENERIC_PHRASES.some(re => re.test(s.preview)));
+}
+
+function evaluateBatchQuality(batch, transcriptContext) {
+  const anchors = buildGroundingAnchors(transcriptContext);
+  const highConfidenceCount = batch.reduce((count, item) => (
+    count + (isHighConfidenceSuggestion(item, anchors, transcriptContext) ? 1 : 0)
+  ), 0);
+  return { highConfidenceCount };
+}
+
+function buildGroundingAnchors(transcriptContext) {
+  const text = String(transcriptContext || '').toLowerCase();
+  const keywordAnchors = extractKeywords(text, 20);
+  const properNouns = String(transcriptContext || '')
+    .match(/\b[A-Z][a-z]{2,}\b/g) || [];
+
+  return new Set([...keywordAnchors, ...properNouns.map(w => w.toLowerCase())]);
+}
+
+function isHighConfidenceSuggestion(item, anchors, transcriptContext) {
+  const preview = String(item?.preview || '').trim();
+  const detail = String(item?.detail || '').trim();
+  if (!preview) return false;
+  if (GENERIC_PHRASES.some(re => re.test(preview))) return false;
+
+  const combined = `${preview} ${detail}`.toLowerCase();
+  const hasNumberInTranscript = /\b\d+(?:\.\d+)?%?\b/.test(String(transcriptContext || ''));
+  const hasNumberInSuggestion = /\b\d+(?:\.\d+)?%?\b/.test(combined);
+  if (hasNumberInTranscript && hasNumberInSuggestion) return true;
+
+  for (const anchor of anchors) {
+    if (!anchor || anchor.length < 4) continue;
+    const escaped = anchor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`\\b${escaped}\\b`, 'i').test(combined)) return true;
+  }
+  return false;
 }

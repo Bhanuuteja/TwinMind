@@ -102,7 +102,7 @@ export function buildChatContext(session, settings) {
     session.contextMemory,
     session.summaryBuffer,
     session.allChunks,
-    800  // raw tail cap in chars
+    500  // raw tail cap in chars
   );
 
   if (compressed.length > settings.chatContextChars) {
@@ -134,7 +134,9 @@ export function detectSignals(text) {
  */
 export function buildSuggestionSystemPrompt(basePrompt, transcriptContext) {
   const s = detectSignals(transcriptContext);
-  const hints = [];
+  const hints = [
+    '- Return at least 2 different suggestion types per batch. Never return 3 of the same type.',
+  ];
 
   if (s.hasDecision)    hints.push('- A decision was mentioned — include one ACTION naming the specific decision and ideally an owner.');
   if (s.hasActionItems) hints.push('- Action items were mentioned — include one suggestion referencing the specific task by name.');
@@ -166,6 +168,16 @@ export function buildChatSystemPrompt(basePrompt, userMessage, transcriptContext
     rules.push('- Highlight any owners, deadlines, or action items from the transcript.');
   if (s.hasDecision)
     rules.push('- Clearly distinguish decisions already made vs. pending ones.');
+
+  if (/\b(clarify\s+intent\s+behind|ask\s+for\s+specifics|clarify\s+the\s+point|explain\s+this|explain\s+that)\b/.test(q)) {
+    rules.push('- Interpret the user message as a request to explain/answer directly; do not bounce back with a clarifying question first.');
+    rules.push('- Provide the direct explanation in the first sentence.');
+  }
+
+  rules.push('- Do not use generic meeting-management filler like "ask the facilitator to clarify the goal" unless the transcript clearly shows goal ambiguity.');
+  rules.push('- If you include a next step, make it specific to concrete transcript details (names, metrics, decisions, owners).');
+  rules.push('- If no specific next step is grounded in transcript details, skip the next-step sentence entirely.');
+
   if (!rules.length)
     rules.push('- Keep the response practical and immediately useful.');
 

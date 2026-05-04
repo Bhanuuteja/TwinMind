@@ -7,10 +7,13 @@
 import {
   GROQ_ENDPOINT,
   GROQ_CHAT_ENDPOINT,
+  DAILY_GPT_TOKEN_LIMIT,
   WHISPER_MODEL,
   WHISPER_MAX_RETRIES,
   WHISPER_RETRY_DELAY_MS,
 } from './config.js';
+
+const GPT_BUDGET_STORAGE_KEY = 'mytwinmind_gpt_daily_budget_v1';
 
 // ── Token estimation ─────────────────────────────────────────────────────
 
@@ -138,19 +141,39 @@ export async function transcribeBlob(blob, mimeType, apiKey, onStatusUpdate, att
  * Throws on API errors.
  */
 export async function chatCompletion({ model, messages, maxTokens, temperature = 0.1, apiKey }) {
-  const res = await fetch(GROQ_CHAT_ENDPOINT, {
-    method:  'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ model, messages, max_tokens: maxTokens, temperature }),
-  });
+  const inputTokens = (messages || []).reduce((sum, m) => sum + estimateTokens(m?.content || ''), 0);
+  const reservedTokens = Math.max(1, inputTokens + Math.max(0, maxTokens || 0));
+  reserveDailyGptTokens(reservedTokens);
+  let settled = false;
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `HTTP ${res.status}`);
+  try {
+    const res = await fetch(GROQ_CHAT_ENDPOINT, {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ model, messages, max_tokens: maxTokens, temperature }),
+    });
+
+    if (!res.ok) {
+      settleDailyGptTokens(reservedTokens, 0);
+      settled = true;
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content ?? '';
+    const usageTotal = Number(data?.usage?.total_tokens || 0);
+    const actualTokens = usageTotal > 0
+      ? usageTotal
+      : (inputTokens + Math.min(Math.max(0, maxTokens || 0), estimateTokens(content)));
+    settleDailyGptTokens(reservedTokens, actualTokens);
+    settled = true;
+    return content;
+  } finally {
+    if (!settled) {
+      settleDailyGptTokens(reservedTokens, 0);
+    }
   }
-
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? '';
 }
 
 /**
@@ -159,43 +182,59 @@ export async function chatCompletion({ model, messages, maxTokens, temperature =
  * Throws on API errors.
  */
 export async function chatCompletionStream({ model, messages, maxTokens, temperature = 0.2, apiKey, onToken }) {
-  const res = await fetch(GROQ_CHAT_ENDPOINT, {
-    method:  'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ model, messages, max_tokens: maxTokens, temperature, stream: true }),
-  });
+  const inputTokens = (messages || []).reduce((sum, m) => sum + estimateTokens(m?.content || ''), 0);
+  const reservedTokens = Math.max(1, inputTokens + Math.max(0, maxTokens || 0));
+  reserveDailyGptTokens(reservedTokens);
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `HTTP ${res.status}`);
-  }
+  let settled = false;
+  try {
+    const res = await fetch(GROQ_CHAT_ENDPOINT, {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ model, messages, max_tokens: maxTokens, temperature, stream: true }),
+    });
 
-  const reader  = res.body.getReader();
-  const decoder = new TextDecoder();
-  let   buffer  = '';
-  let   full    = '';
+    if (!res.ok) {
+      settleDailyGptTokens(reservedTokens, 0);
+      settled = true;
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `HTTP ${res.status}`);
+    }
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let   buffer  = '';
+    let   full    = '';
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop(); // last possibly-incomplete line stays in buffer
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const payload = line.slice(6).trim();
-      if (payload === '[DONE]') break;
-      try {
-        const delta = JSON.parse(payload).choices?.[0]?.delta?.content || '';
-        full += delta;
-        onToken?.(delta, full);
-      } catch { /* malformed SSE chunk — skip */ }
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // last possibly-incomplete line stays in buffer
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const payload = line.slice(6).trim();
+        if (payload === '[DONE]') break;
+        try {
+          const delta = JSON.parse(payload).choices?.[0]?.delta?.content || '';
+          full += delta;
+          onToken?.(delta, full);
+        } catch { /* malformed SSE chunk — skip */ }
+      }
+    }
+
+    const actualTokens = inputTokens + Math.min(Math.max(0, maxTokens || 0), estimateTokens(full));
+    settleDailyGptTokens(reservedTokens, actualTokens);
+    settled = true;
+    return full;
+  } finally {
+    if (!settled) {
+      settleDailyGptTokens(reservedTokens, 0);
     }
   }
-
-  return full;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -222,4 +261,55 @@ function normalizeMimeType(mimeType) {
 
 function delay(ms) {
   return new Promise(r => setTimeout(r, ms));
+}
+
+function getBudgetDayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function readDailyBudget() {
+  if (typeof localStorage === 'undefined') {
+    return { day: getBudgetDayKey(), usedTokens: 0 };
+  }
+  try {
+    const raw = localStorage.getItem(GPT_BUDGET_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    const today = getBudgetDayKey();
+    if (!parsed || parsed.day !== today) {
+      return { day: today, usedTokens: 0 };
+    }
+    return {
+      day: today,
+      usedTokens: Math.max(0, Number(parsed.usedTokens || 0)),
+    };
+  } catch {
+    return { day: getBudgetDayKey(), usedTokens: 0 };
+  }
+}
+
+function writeDailyBudget(usedTokens) {
+  if (typeof localStorage === 'undefined') return;
+  const payload = {
+    day: getBudgetDayKey(),
+    usedTokens: Math.max(0, Math.floor(usedTokens)),
+  };
+  localStorage.setItem(GPT_BUDGET_STORAGE_KEY, JSON.stringify(payload));
+}
+
+function reserveDailyGptTokens(tokens) {
+  const budget = readDailyBudget();
+  const nextUsed = budget.usedTokens + Math.max(0, Math.floor(tokens));
+  if (nextUsed > DAILY_GPT_TOKEN_LIMIT) {
+    const remaining = Math.max(0, DAILY_GPT_TOKEN_LIMIT - budget.usedTokens);
+    throw new Error(`Daily GPT token limit reached (${DAILY_GPT_TOKEN_LIMIT}). Remaining today: ${remaining}.`);
+  }
+  writeDailyBudget(nextUsed);
+}
+
+function settleDailyGptTokens(reservedTokens, actualTokens) {
+  const budget = readDailyBudget();
+  const reserved = Math.max(0, Math.floor(reservedTokens || 0));
+  const actual = Math.max(0, Math.floor(actualTokens || 0));
+  const adjusted = budget.usedTokens - reserved + actual;
+  writeDailyBudget(Math.max(0, adjusted));
 }
