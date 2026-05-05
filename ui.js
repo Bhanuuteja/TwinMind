@@ -70,8 +70,6 @@ export const dom = {
   sugBody:             $('sugBody'),
   sugDot:              $('sugDot'),
   sugEmpty:            $('sugEmpty'),
-  sugBatchCount:       $('sugBatchCount'),
-  sugAutoRefreshLabel: $('sugAutoRefreshLabel'),
   btnRefresh:          $('btnRefresh'),
   // chat
   chatMessages:        $('chatMessages'),
@@ -134,13 +132,11 @@ export function startChunkBar(durationMs) {
     const remaining = Math.max(0, Math.ceil((durationMs - elapsed) / 1000));
     dom.chunkBarFill.style.width   = pct + '%';
     dom.chunkCountdown.textContent = remaining + 's';
-    if (dom.sugAutoRefreshLabel) dom.sugAutoRefreshLabel.textContent = `Auto-refresh in ${remaining}s`;
   }, 250);
 }
 
 export function resetChunkBar() {
   chunkBarStartMs = Date.now();
-  if (dom.sugAutoRefreshLabel) dom.sugAutoRefreshLabel.textContent = 'Auto-refresh in 30s';
 }
 
 export function stopChunkBar() {
@@ -148,7 +144,6 @@ export function stopChunkBar() {
   dom.chunkBarWrap.classList.add('hidden');
   dom.chunkBarFill.style.width   = '0%';
   dom.chunkCountdown.textContent = '30s';
-  if (dom.sugAutoRefreshLabel) dom.sugAutoRefreshLabel.textContent = 'Auto-refresh in 30s';
 }
 
 // ── Recording UI state ────────────────────────────────────────────────────
@@ -200,8 +195,6 @@ export function resetSessionUI() {
   dom.emptyState.style.display = '';
   dom.sugBody.querySelectorAll('.sug-batch').forEach(el => el.remove());
   dom.sugEmpty.style.display = '';
-  if (dom.sugBatchCount) dom.sugBatchCount.textContent = '0 BATCHES';
-  if (dom.sugAutoRefreshLabel) dom.sugAutoRefreshLabel.textContent = 'Auto-refresh in 30s';
   dom.chatMessages.querySelectorAll('.chat-msg').forEach(el => el.remove());
   dom.chatEmpty.style.display = '';
   dom.segCountEl.textContent     = '0';
@@ -331,10 +324,6 @@ export function renderSuggestionBatch(suggestions, onCardClick) {
   });
 
   dom.sugBody.insertBefore(batch, dom.sugBody.firstChild);
-  if (dom.sugBatchCount) {
-    const count = dom.sugBody.querySelectorAll('.sug-batch').length;
-    dom.sugBatchCount.textContent = `${count} BATCH${count === 1 ? '' : 'ES'}`;
-  }
 }
 
 /** Read all currently displayed suggestion previews (for deduplication). */

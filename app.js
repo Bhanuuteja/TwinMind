@@ -13,7 +13,7 @@
      ui.js              — all DOM reads/writes, rendering
 ───────────────────────────────────────────────────────────────────────────── */
 
-import { CHUNK_DURATION_MS, WHISPER_MODEL, SUGGESTIONS_MODEL, CHAT_MODEL, CHAT_MAX_TOKENS, CHAT_HISTORY_TURNS } from './config.js';
+import { CHUNK_DURATION_MS, WHISPER_MODEL, SUGGESTIONS_MODEL, CHAT_MODEL } from './config.js';
 import {
   DEFAULT_LIVE_PROMPT_TEMPLATE,
   DEFAULT_CHAT_PROMPT_TEMPLATE,
@@ -294,9 +294,9 @@ async function generateChatResponse(userMessage, systemOverride = null) {
 
   const payload = [
     { role: 'system', content: systemPrompt },
-    ...session.chatHistory.slice(-(CHAT_HISTORY_TURNS * 2)).map(m => ({ role: m.role, content: m.content })),
+    ...session.chatHistory.slice(-12).map(m => ({ role: m.role, content: m.content })),
   ];
-  logTokenEstimate('chat', payload, CHAT_MAX_TOKENS);
+  logTokenEstimate('chat', payload, 800);
 
   appendChatMessage('user', userMessage);
   const { wrap, bubble } = appendChatMessage('assistant', '', true);
@@ -308,7 +308,7 @@ async function generateChatResponse(userMessage, systemOverride = null) {
     fullReply = await chatCompletionStream({
       model:       CHAT_MODEL,
       messages:    payload,
-      maxTokens:   CHAT_MAX_TOKENS,
+      maxTokens:   1200,
       temperature: 0.2,
       apiKey:      settings.apiKey,
       onToken:     (_delta, acc) => {
@@ -339,9 +339,7 @@ function sendToChat(text, detail = null) {
   // The preview is the user-visible message — clean and readable.
   // The detail is a hint for the LLM only — injected into the system prompt
   // so the model uses it as directional context, not something to parrot back.
-  const transcript = session.allChunks.length
-    ? session.allChunks.map(c => `[${c.timestamp}] ${c.text}`).join('\n\n')
-    : buildChatContext(session, settings);
+  const transcript = buildChatContext(session, settings);
   const systemOverride = settings.clickAnswerPromptTemplate
     .replace('{{TRANSCRIPT}}', transcript)
     .replace('{{ACTION}}', text)
@@ -380,7 +378,7 @@ dom.btnDownload.addEventListener('click', () => {
   const date = new Date().toISOString().slice(0, 16).replace('T', '_').replace(':', '-');
   const blob = new Blob([text], { type: 'text/plain' });
   const url  = URL.createObjectURL(blob);
-  const a    = Object.assign(document.createElement('a'), { href: url, download: `mytwinmind_transcript_${date}.txt` });
+  const a    = Object.assign(document.createElement('a'), { href: url, download: `twinmind_transcript_${date}.txt` });
   a.click();
   URL.revokeObjectURL(url);
   showToast('Transcript downloaded!', 'success');
@@ -421,7 +419,7 @@ dom.btnExportSession?.addEventListener('click', () => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
     const date = nowIso.slice(0, 19).replace('T', '_').replace(/:/g, '-');
     const url  = URL.createObjectURL(blob);
-    const a    = Object.assign(document.createElement('a'), { href: url, download: `mytwinmind_session_export_${date}.json` });
+    const a    = Object.assign(document.createElement('a'), { href: url, download: `twinmind_session_export_${date}.json` });
     document.body.append(a);
     a.click();
     a.remove();

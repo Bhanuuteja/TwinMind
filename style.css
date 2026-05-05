@@ -1120,31 +1120,6 @@ body::after {
   font-weight: 600;
 }
 
-.sug-batch-counter {
-  margin-left: 6px;
-  font-size: 10px;
-  letter-spacing: 0.6px;
-  font-weight: 600;
-  color: var(--accent-blue);
-  background: rgba(99, 179, 237, 0.12);
-  border: 1px solid rgba(99, 179, 237, 0.25);
-  border-radius: 999px;
-  padding: 2px 8px;
-  white-space: nowrap;
-}
-
-.sug-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.sug-auto-refresh-label {
-  font-size: 11px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
 .sug-dot {
   width: 7px;
   height: 7px;
