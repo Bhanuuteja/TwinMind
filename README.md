@@ -1,4 +1,4 @@
-# TwinMind – Real-Time AI Meeting Copilot for Live Decision Support
+# MyTwinMind – Real-Time AI Meeting Copilot for Live Decision Support
 
 ## Problem Statement
 
